@@ -38,10 +38,12 @@ class DiskTopology:
         return (d_eff <= self.comm_r) & ~jnp.eye(n, dtype=bool)
 
 
-@dataclass(frozen=True)
+@chex.dataclass(frozen=True)
 class ChannelState:
-    ring: jax.Array          # [delay+1, N, N?, *leaf] queued payloads (per sender)
-    t: jax.Array             # i32 scalar — channel clock
+    """Carried channel memory — a pytree (it rides the scan carry; a plain dataclass
+    is not a valid JAX type, same lesson as WorldParams)."""
+    ring: chex.Array         # [delay+1, N, *leaf] queued payloads (per sender)
+    t: chex.Array            # i32 scalar — channel clock
 
 
 @dataclass(frozen=True)
