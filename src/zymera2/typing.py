@@ -73,12 +73,17 @@ class StaticWorldParams:
     rules: tuple = ()
 
 
-@dataclass(frozen=True)
+@chex.dataclass(frozen=True)
 class WorldParams:
-    """Runtime values passed per ``world_step`` call — vmappable, sweepable without recompile.
+    """Runtime values passed per ``world_step`` call — a JAX pytree (chex.dataclass), so it
+    is a legal runtime argument under jit: sweepable across sizes without recompile, and
+    vmappable. (A plain dataclass is NOT a pytree — caught by the contract integration
+    test; this is the Kinetix runtime-params pattern.)
 
     Holds world-side quantities only: dimensions and the sensing radius. The communication
     radius is a *bridge* parameter (Topology config, P3) — comms is not a world property.
+    Leaves are Python ints at construction (weak-typed scalars under trace); the runtime
+    values are used for masking/comparison only — array SHAPES always come from the caps.
     """
     h: int
     w: int
