@@ -1,7 +1,7 @@
 """World generation (spec §5): parameterized, jit-safe, padded to caps.
 
 Terrains: ``open`` (no walls), ``clutter`` (scattered obstacle cells), ``rooms``
-(four rooms with doors). Spawns are distinct free cells. The terrain string and
+(four rooms with doors), ``mixed`` (rooms + clutter — corridors AND debris). Spawns are distinct free cells. The terrain string and
 counts live in :class:`GenConfig` (static — changing terrain recompiles); the
 runtime sizes come from the ``WorldParams`` it carries.
 """
@@ -47,17 +47,32 @@ def generate(gcfg: GenConfig, static: StaticWorldParams, params: WorldParams,
     cc = jnp.arange(static.w_max)[None, :]
     arena = (rr < params.h) & (cc < params.w)
 
+    def _clutter(sub):
+        score = jax.random.uniform(jax.random.fold_in(key, sub),
+                                   (static.h_max, static.w_max))
+        score = jnp.where(arena, score, -jnp.inf)
+        k = min(gcfg.n_obstacles, static.h_max * static.w_max)
+        if k == 0:
+            return jnp.zeros_like(arena)
+        thresh = jax.lax.top_k(score.ravel(), k)[0][-1]
+        return (score >= thresh) & arena
+
     if gcfg.terrain == "open":
         wall = jnp.zeros((static.h_max, static.w_max), bool)
     elif gcfg.terrain == "rooms":
         wall = _rooms_walls(static, params, gcfg.door) & arena
     elif gcfg.terrain == "clutter":
-        score = jax.random.uniform(jax.random.fold_in(key, 1),
-                                   (static.h_max, static.w_max))
-        score = jnp.where(arena, score, -jnp.inf)
-        k = min(gcfg.n_obstacles, static.h_max * static.w_max)
-        thresh = jax.lax.top_k(score.ravel(), k)[0][-1] if k > 0 else jnp.inf
-        wall = (score >= thresh) & arena if k > 0 else jnp.zeros_like(arena)
+        wall = _clutter(1)
+    elif gcfg.terrain == "mixed":
+        rooms = _rooms_walls(static, params, gcfg.door) & arena
+        rr2 = jnp.arange(static.h_max)[:, None]
+        cc2 = jnp.arange(static.w_max)[None, :]
+        # keep clutter off the door lines so doors are never sealed shut
+        q1, q3 = params.h // 4, (3 * params.h) // 4
+        c1, c3 = params.w // 4, (3 * params.w) // 4
+        door_zone = ((jnp.abs(rr2 - q1) <= gcfg.door) | (jnp.abs(rr2 - q3) <= gcfg.door)
+                     | (jnp.abs(cc2 - c1) <= gcfg.door) | (jnp.abs(cc2 - c3) <= gcfg.door))
+        wall = rooms | (_clutter(1) & ~door_zone)
     else:
         raise ValueError(f"unknown terrain {gcfg.terrain!r}")
 

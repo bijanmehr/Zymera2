@@ -153,3 +153,19 @@ def test_worldgen_shapes_and_distinct_spawns():
         wall = np.asarray(w.wall)
         assert not wall[pos[:, 0], pos[:, 1]].any(), f"spawned in wall on {terr}"
         assert np.asarray(w.arena)[:12, :12].all() and not np.asarray(w.arena)[12:, :].any()
+
+
+def test_mixed_terrain_has_rooms_and_clutter_and_open_doors():
+    static = zt.StaticWorldParams(h_max=32, w_max=32, n_max=10, m_max=1, rules=())
+    params = zt.WorldParams(h=32, w=32, n=10, m=0, sense_r=1)
+    w = generate(GenConfig("mixed", n_obstacles=60), static, params, jax.random.PRNGKey(4))
+    wall = np.asarray(w.wall)
+    assert wall[:, 16].sum() >= 8 and wall[16, :].sum() >= 8   # room walls present
+    assert wall.sum() > wall[:, 16].sum() + wall[16, :].sum()  # plus clutter
+    q1, q3 = 8, 24
+    assert not wall[q1 - 1:q1 + 2, 16].all() and not wall[q3 - 1:q3 + 2, 16].all()
+    assert not wall[16, q1 - 1:q1 + 2].all() and not wall[16, q3 - 1:q3 + 2].all()
+    # spawns valid + free-cell fraction sane for a "challenging but coverable" map
+    pos = np.concatenate([np.asarray(w.agent_pos), np.asarray(w.body_pos)])
+    assert not wall[pos[:, 0], pos[:, 1]].any()
+    assert 0.7 < (~wall).mean() < 0.97
