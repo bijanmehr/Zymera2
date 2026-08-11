@@ -9,6 +9,15 @@ def test_action_ids():
     assert len(zt.ACTION_DELTAS) == 5
 
 
+def test_action_deltas_semantics():
+    # (row, col), row axis 0 with down positive: N up, S down, E right, W left.
+    assert zt.ACTION_DELTAS[zt.ActionId.STAY] == (0, 0)
+    assert zt.ACTION_DELTAS[zt.ActionId.N] == (-1, 0)
+    assert zt.ACTION_DELTAS[zt.ActionId.S] == (1, 0)
+    assert zt.ACTION_DELTAS[zt.ActionId.E] == (0, 1)
+    assert zt.ACTION_DELTAS[zt.ActionId.W] == (0, -1)
+
+
 def test_world_constructs_with_declared_shapes():
     N, M, H, W = 4, 2, 8, 8
     w = zt.World(
@@ -27,13 +36,20 @@ def test_world_has_no_forbidden_fields():
     assert forbidden.isdisjoint(set(zt.World.__dataclass_fields__))
 
 
-def test_kernel_events_shapes():
+def test_kernel_events_unified_entity_index():
+    # events cover the unified conflict pass: E = N + M (agents then bodies, C1)
     N, M = 4, 2
+    E = N + M
     e = zt.KernelEvents(
-        moved=jnp.zeros((N,), bool), blocked=jnp.zeros((N,), bool),
-        conflict=jnp.zeros((N, N), bool), captured=jnp.zeros((M,), bool),
-        sensed=jnp.zeros((N,), bool))
-    chex.assert_shape(e.conflict, (N, N))
+        moved=jnp.zeros((E,), bool), blocked=jnp.zeros((E,), bool),
+        conflict=jnp.zeros((E, E), bool), captured=jnp.zeros((M,), bool))
+    chex.assert_shape(e.conflict, (E, E))
+
+
+def test_kernel_events_have_no_sense_field():
+    # sensing is a harness-side readout with its own SenseEvent (spec §14/C4);
+    # world_step cannot emit "sensed"
+    assert "sensed" not in zt.KernelEvents.__dataclass_fields__
 
 
 def test_protocols_present_and_payloadspec():

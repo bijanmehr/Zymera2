@@ -8,7 +8,7 @@ def _static():
 
 
 def _params(**kw):
-    d = dict(h=8, w=8, n=4, m=2, comm_r=3, sense_r=1)
+    d = dict(h=8, w=8, n=4, m=2, sense_r=1)
     d.update(kw)
     return zt.WorldParams(**d)
 
@@ -26,9 +26,18 @@ def test_runtime_exceeds_caps_rejected():
 
 def test_nonpositive_rejected():
     with pytest.raises(ValueError):
-        validate_params(_static(), _params(comm_r=0))
+        validate_params(_static(), _params(sense_r=0))
     with pytest.raises(ValueError):
         validate_params(_static(), _params(h=0))
+
+
+def test_zero_bodies_is_valid():
+    validate_params(_static(), _params(m=0))  # coverage missions have no bodies
+
+
+def test_comms_params_do_not_live_in_world_params():
+    # comms is a bridge property, not a world property (ruling 2026-08-10; spec §8)
+    assert "comm_r" not in zt.WorldParams.__dataclass_fields__
 
 
 def test_disjoint_seed_pools_ok_and_overlap_rejected():

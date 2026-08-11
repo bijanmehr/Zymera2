@@ -75,12 +75,15 @@ class StaticWorldParams:
 
 @dataclass(frozen=True)
 class WorldParams:
-    """Runtime values passed per ``world_step`` call — vmappable, sweepable without recompile."""
+    """Runtime values passed per ``world_step`` call — vmappable, sweepable without recompile.
+
+    Holds world-side quantities only: dimensions and the sensing radius. The communication
+    radius is a *bridge* parameter (Topology config, P3) — comms is not a world property.
+    """
     h: int
     w: int
     n: int
     m: int
-    comm_r: int
     sense_r: int
 
 
@@ -100,12 +103,18 @@ class PayloadSpec:
 @chex.dataclass(frozen=True)
 class KernelEvents:
     """Typed, fixed-shape record of what the world did this tick. Observer-only — agents
-    never receive events; the task layer computes rewards/metrics/ledger from them."""
-    moved: chex.Array     # bool[N_max]        — agent i took a non-STAY move that landed
-    blocked: chex.Array   # bool[N_max]        — agent i's intended move was refused
-    conflict: chex.Array  # bool[N_max, N_max] — i,j contested the same cell (i yielded)
+    never receive events; the task layer computes rewards/metrics/ledger from them.
+
+    Entity index convention (matches the unified conflict pass, C1): agents occupy global
+    indices ``0..N_max-1``, bodies ``N_max..E_max-1``, with ``E_max = N_max + M_max``.
+    Sensing events are NOT emitted here — sensing is a harness-side readout returning its
+    own ``SenseEvent`` (P2), because ``world_step`` never performs sensing (spec §14/C4).
+    Delivery events ride ``Channel.deliver``'s own return, not this kernel record.
+    """
+    moved: chex.Array     # bool[E_max]        — entity e took a non-STAY move that landed
+    blocked: chex.Array   # bool[E_max]        — entity e's intended move was refused
+    conflict: chex.Array  # bool[E_max, E_max] — e,f contested the same cell (e yielded)
     captured: chex.Array  # bool[M_max]        — body j flipped captured this tick
-    sensed: chex.Array    # bool[N_max]        — agent i performed a sensing readout
 
 
 # Channel-owned pytree (ring buffers, stamps). Opaque to the world; concrete type in P3.

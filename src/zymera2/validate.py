@@ -22,7 +22,7 @@ def validate_params(static: StaticWorldParams, params: WorldParams) -> None:
             raise ValueError(f"runtime {name}={v} exceeds cap {name}_max={cap}")
 
     positive = (("h", params.h), ("w", params.w), ("n", params.n),
-                ("comm_r", params.comm_r), ("sense_r", params.sense_r))
+                ("sense_r", params.sense_r))
     for name, v in positive:
         if v <= 0:
             raise ValueError(f"{name} must be positive, got {v}")

@@ -16,5 +16,8 @@ viz = ["matplotlib>=3.5", "pillow"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+zymera2 = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
