@@ -106,6 +106,7 @@ def test_T5_obs_whitelist_and_no_global_leaf():
         assert (STATIC.h_max, STATIC.w_max) != v.shape[-2:], \
             f"obs[{k}] smuggles a full-map plane"
     assert obs["patch"].shape == (4, 3, 3) and obs["statics"].shape == (4, 2)
+    assert obs["pose"].shape == (4, 2)
 
 
 # ================================================================== MUTATION TESTS

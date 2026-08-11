@@ -14,8 +14,10 @@ Key tree (spec §14/C6 — fold_in only, no sequential splits):
   k_world(t)    = fold_in(fold_in(base, 2), t)
   k_chan(t)     = fold_in(fold_in(base, 3), t)   (channel folds its own tick again)
 
-Observation contract (G8): obs_i is EXACTLY {patch, patch_valid, entities, mail,
-adj_row, statics} with statics = [h, w] — the whitelist test pins these keys.
+Observation contract (G8): obs_i is EXACTLY {pose, patch, patch_valid, entities, mail,
+adj_row, statics} with statics = [h, w] — the whitelist test pins these keys. ``pose`` is
+the agent's own position (the declared "exact pose, shared frame" assumption, spec §10.4);
+own state is trivially inside the agent's cone.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ from .geometry import pairwise_dist, wall_crossings
 from .typing import StaticWorldParams, World, WorldParams
 from .world import world_step
 
-OBS_KEYS = ("patch", "patch_valid", "entities", "mail", "adj_row", "statics")
+OBS_KEYS = ("pose", "patch", "patch_valid", "entities", "mail", "adj_row", "statics")
 
 
 class TickCarry(NamedTuple):
@@ -47,8 +49,8 @@ def assemble_obs(static: StaticWorldParams, params: WorldParams, state: World,
     ents = sense_entities(static, params, state, sense_r)
     statics = jnp.stack([jnp.int32(params.h), jnp.int32(params.w)])
     n = static.n_max
-    return {"patch": walls, "patch_valid": valid, "entities": ents,
-            "mail": mail, "adj_row": delivered,
+    return {"pose": state.agent_pos, "patch": walls, "patch_valid": valid,
+            "entities": ents, "mail": mail, "adj_row": delivered,
             "statics": jnp.broadcast_to(statics, (n, 2))}, sev
 
 
