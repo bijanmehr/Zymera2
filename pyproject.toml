@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zymera2"
+version = "0.1.0.dev0"
+description = "A pure-JAX discrete grid-world simulator (world-only core)."
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4", "chex>=0.1", "numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "hypothesis>=6.0"]
+viz = ["matplotlib>=3.5", "pillow"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
