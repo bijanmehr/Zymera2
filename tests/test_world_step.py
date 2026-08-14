@@ -183,3 +183,21 @@ def test_cluster_spawn_starts_compact_and_valid():
         assert not wall[pos[:, 0], pos[:, 1]].any()
         d = np.abs(pos[:, None] - pos[None, :]).max(-1)
         assert d.max() <= 8, f"cluster spawn too spread: {d.max()}"
+
+
+def test_corner_spawn_bunches_at_the_chosen_side():
+    static = zt.StaticWorldParams(h_max=32, w_max=32, n_max=10, m_max=1, rules=())
+    params = zt.WorldParams(h=32, w=32, n=10, m=0, sense_r=1)
+    for corner, (rmax, cmax) in (("tl", (8, 8)), ("br", (None, None))):
+        w = generate(GenConfig("mixed", n_obstacles=60, spawn="corner", corner=corner),
+                     static, params, jax.random.PRNGKey(11))
+        pos = np.asarray(w.agent_pos)
+        wall = np.asarray(w.wall)
+        assert len({tuple(p) for p in pos}) == len(pos)
+        assert not wall[pos[:, 0], pos[:, 1]].any()
+        d = np.abs(pos[:, None] - pos[None, :]).max(-1)
+        assert d.max() <= 8, f"corner spawn too spread: {d.max()}"
+        if corner == "tl":
+            assert pos.max() <= 8, f"tl spawn not at the top-left side: {pos.max()}"
+        else:
+            assert pos.min() >= 32 - 1 - 8, f"br spawn not at the bottom-right side"

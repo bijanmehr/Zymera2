@@ -21,8 +21,10 @@ class GenConfig:
     terrain: str = "open"          # open | clutter | rooms | mixed
     n_obstacles: int = 0           # clutter/mixed
     door: int = 1                  # rooms/mixed: half-width of door gaps
-    spawn: str = "scatter"         # scatter (uniform free cells) | cluster (around an anchor)
-    spawn_radius: int = 2          # cluster: distance-penalty scale (v0 convention)
+    spawn: str = "scatter"         # scatter | cluster (random anchor) | corner (v0 tests:
+                                   #   bunched contiguous block at one side of the world)
+    spawn_radius: int = 2          # cluster/corner: distance-penalty scale (v0 convention)
+    corner: str = "tl"             # corner mode: tl | tr | bl | br
 
 
 def _rooms_walls(static: StaticWorldParams, params: WorldParams, door: int) -> jax.Array:
@@ -85,10 +87,14 @@ def generate(gcfg: GenConfig, static: StaticWorldParams, params: WorldParams,
     noise = jax.random.uniform(jax.random.fold_in(key, 2),
                                (static.h_max, static.w_max))
     free = arena & ~wall
-    if gcfg.spawn == "cluster":
-        a_score = jnp.where(free, noise, -jnp.inf)
-        a_flat = jnp.argmax(a_score)
-        ar, ac = a_flat // static.w_max, a_flat % static.w_max
+    if gcfg.spawn in ("cluster", "corner"):
+        if gcfg.spawn == "corner":
+            ar = jnp.where(gcfg.corner[0] == "t", 1, params.h - 2)
+            ac = jnp.where(gcfg.corner[1] == "l", 1, params.w - 2)
+        else:
+            a_score = jnp.where(free, noise, -jnp.inf)
+            a_flat = jnp.argmax(a_score)
+            ar, ac = a_flat // static.w_max, a_flat % static.w_max
         rr2 = jnp.arange(static.h_max)[:, None]
         cc2 = jnp.arange(static.w_max)[None, :]
         d = jnp.maximum(jnp.abs(rr2 - ar), jnp.abs(cc2 - ac)).astype(jnp.float32)
