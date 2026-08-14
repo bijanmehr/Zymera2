@@ -169,3 +169,17 @@ def test_mixed_terrain_has_rooms_and_clutter_and_open_doors():
     pos = np.concatenate([np.asarray(w.agent_pos), np.asarray(w.body_pos)])
     assert not wall[pos[:, 0], pos[:, 1]].any()
     assert 0.7 < (~wall).mean() < 0.97
+
+
+def test_cluster_spawn_starts_compact_and_valid():
+    static = zt.StaticWorldParams(h_max=32, w_max=32, n_max=10, m_max=1, rules=())
+    params = zt.WorldParams(h=32, w=32, n=10, m=0, sense_r=1)
+    for seed in range(5):
+        w = generate(GenConfig("mixed", n_obstacles=60, spawn="cluster"),
+                     static, params, jax.random.PRNGKey(seed))
+        pos = np.asarray(w.agent_pos)
+        wall = np.asarray(w.wall)
+        assert len({tuple(p) for p in pos}) == len(pos)
+        assert not wall[pos[:, 0], pos[:, 1]].any()
+        d = np.abs(pos[:, None] - pos[None, :]).max(-1)
+        assert d.max() <= 8, f"cluster spawn too spread: {d.max()}"

@@ -18,9 +18,11 @@ from .typing import StaticWorldParams, World, WorldParams
 @dataclass(frozen=True)
 class GenConfig:
     """Static generation recipe. ``params`` are the runtime sizes the world is built at."""
-    terrain: str = "open"          # open | clutter | rooms
-    n_obstacles: int = 0           # clutter only
-    door: int = 1                  # rooms: half-width of door gaps
+    terrain: str = "open"          # open | clutter | rooms | mixed
+    n_obstacles: int = 0           # clutter/mixed
+    door: int = 1                  # rooms/mixed: half-width of door gaps
+    spawn: str = "scatter"         # scatter (uniform free cells) | cluster (around an anchor)
+    spawn_radius: int = 2          # cluster: distance-penalty scale (v0 convention)
 
 
 def _rooms_walls(static: StaticWorldParams, params: WorldParams, door: int) -> jax.Array:
@@ -76,11 +78,24 @@ def generate(gcfg: GenConfig, static: StaticWorldParams, params: WorldParams,
     else:
         raise ValueError(f"unknown terrain {gcfg.terrain!r}")
 
-    # Distinct free spawn cells: rank free cells by random score, take the top E.
+    # Distinct free spawn cells: rank free cells by score, take the top E.
+    # scatter: uniform random score. cluster: nearest-to-anchor (random free anchor),
+    # noise-tiebroken — the team STARTS connected (v0's spawn_radius convention).
     E = static.n_max + static.m_max
-    sscore = jax.random.uniform(jax.random.fold_in(key, 2),
-                                (static.h_max, static.w_max))
-    sscore = jnp.where(arena & ~wall, sscore, -jnp.inf)
+    noise = jax.random.uniform(jax.random.fold_in(key, 2),
+                               (static.h_max, static.w_max))
+    free = arena & ~wall
+    if gcfg.spawn == "cluster":
+        a_score = jnp.where(free, noise, -jnp.inf)
+        a_flat = jnp.argmax(a_score)
+        ar, ac = a_flat // static.w_max, a_flat % static.w_max
+        rr2 = jnp.arange(static.h_max)[:, None]
+        cc2 = jnp.arange(static.w_max)[None, :]
+        d = jnp.maximum(jnp.abs(rr2 - ar), jnp.abs(cc2 - ac)).astype(jnp.float32)
+        sscore = jnp.where(free, -d + noise / jnp.float32(max(gcfg.spawn_radius, 1)),
+                           -jnp.inf)
+    else:
+        sscore = jnp.where(free, noise, -jnp.inf)
     _, flat = jax.lax.top_k(sscore.ravel(), E)
     spawn = jnp.stack([flat // static.w_max, flat % static.w_max], -1).astype(jnp.int32)
 
