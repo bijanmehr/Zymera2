@@ -23,8 +23,11 @@ class GenConfig:
     door: int = 1                  # rooms/mixed: half-width of door gaps
     spawn: str = "scatter"         # scatter | cluster (random anchor) | corner (v0 tests:
                                    #   bunched contiguous block at one side of the world)
+                                   #   | spaced (corner-biased, but every pair >= min_sep
+                                   #   apart — the tether "one free cell between" start)
     spawn_radius: int = 2          # cluster/corner: distance-penalty scale (v0 convention)
     corner: str = "tl"             # corner mode: tl | tr | bl | br
+    min_sep: int = 2               # spaced mode: min Chebyshev separation between entities
 
 
 def _rooms_walls(static: StaticWorldParams, params: WorldParams, door: int) -> jax.Array:
@@ -87,6 +90,35 @@ def generate(gcfg: GenConfig, static: StaticWorldParams, params: WorldParams,
     noise = jax.random.uniform(jax.random.fold_in(key, 2),
                                (static.h_max, static.w_max))
     free = arena & ~wall
+    if gcfg.spawn == "spaced":
+        # Corner-anchored like "corner", but entities are placed GREEDILY with a
+        # minimum Chebyshev separation (default 2 = one free cell between every
+        # pair) — the tether spaced-start convention. Fixed-length scan over E
+        # picks keeps it jit/vmap-safe; each pick masks its neighbourhood out.
+        ar = jnp.where(gcfg.corner[0] == "t", 1, params.h - 2)
+        ac = jnp.where(gcfg.corner[1] == "l", 1, params.w - 2)
+        rr2 = jnp.arange(static.h_max)[:, None]
+        cc2 = jnp.arange(static.w_max)[None, :]
+        d0 = jnp.maximum(jnp.abs(rr2 - ar), jnp.abs(cc2 - ac)).astype(jnp.float32)
+        score0 = jnp.where(free, -d0 + noise / jnp.float32(max(gcfg.spawn_radius, 1)),
+                           -jnp.inf)
+
+        def pick(avail, _):
+            flat = jnp.argmax(avail.ravel())
+            r, c = flat // static.w_max, flat % static.w_max
+            sep = jnp.maximum(jnp.abs(rr2 - r), jnp.abs(cc2 - c))
+            return jnp.where(sep < gcfg.min_sep, -jnp.inf, avail), \
+                jnp.stack([r, c]).astype(jnp.int32)
+
+        _, spawn = jax.lax.scan(pick, score0, None, length=E)
+        return World(
+            agent_pos=spawn[: static.n_max],
+            agent_alive=jnp.arange(static.n_max) < params.n,
+            body_pos=spawn[static.n_max:],
+            body_alive=jnp.arange(static.m_max) < params.m,
+            body_kind=jnp.zeros((static.m_max,), jnp.int32),
+            wall=wall, arena=arena,
+            step_count=jnp.zeros((), jnp.int32))
     if gcfg.spawn in ("cluster", "corner"):
         if gcfg.spawn == "corner":
             ar = jnp.where(gcfg.corner[0] == "t", 1, params.h - 2)
